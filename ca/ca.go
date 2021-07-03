@@ -71,6 +71,8 @@ func makeSubjectKeyID(key crypto.PublicKey) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	println("Howdy aus makeSubjectKeyID")
+	println(key)
 
 	// Unmarshal it again so we can extract the key bitstring bytes
 	var pubInfo struct {
@@ -249,6 +251,7 @@ func (ca *CAImpl) newChain(intermediateKey crypto.Signer, intermediateSubject pk
 }
 
 func (ca *CAImpl) newCertificate(domains []string, ips []net.IP, key crypto.PublicKey, accountID, notBefore, notAfter string) (*core.Certificate, error) {
+	println("Neues Certifikat wird erstellt")
 	var cn string
 	if len(domains) > 0 {
 		cn = domains[0]

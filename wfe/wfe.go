@@ -488,6 +488,7 @@ func (wfe *WebFrontEndImpl) handleCertStatusBySerial(
 	}
 }
 
+//hier: und drunter: HTTP Request handling
 func (wfe *WebFrontEndImpl) Handler() http.Handler {
 	m := http.NewServeMux()
 	// GET & POST handlers
@@ -528,6 +529,7 @@ func (wfe *WebFrontEndImpl) Directory(
 	ctx context.Context,
 	response http.ResponseWriter,
 	request *http.Request) {
+	println(wfe)
 
 	directoryEndpoints := map[string]string{
 		"newNonce":   noncePath,
@@ -949,6 +951,7 @@ func isASCII(str string) bool {
 }
 
 func (wfe *WebFrontEndImpl) verifyContacts(acct acme.Account) *acme.ProblemDetails {
+	println("WASS")
 	contacts := acct.Contact
 
 	// Providing no Contacts is perfectly acceptable
@@ -967,9 +970,11 @@ func (wfe *WebFrontEndImpl) verifyContacts(acct acme.Account) *acme.ProblemDetai
 			return acme.InvalidContactProblem(fmt.Sprintf("contact %q is invalid", c))
 		}
 		if parsed.Scheme != "mailto" {
+			println("Tatsächlich das Shema ist schuld")
 			return acme.UnsupportedContactProblem(fmt.Sprintf(
 				"contact method %q is not supported", parsed.Scheme))
 		}
+		println("WASS")
 		email := parsed.Opaque
 		// An empty or omitted Contact array should be used instead of an empty contact
 		if email == "" {
@@ -1222,6 +1227,7 @@ func (wfe *WebFrontEndImpl) KeyRollover(
 	}
 
 	newPubKey, prob := wfe.extractJWK(request, parsedInnerJWS)
+	println(prob.Detail)
 	if prob != nil {
 		wfe.sendError(prob, response)
 		return
@@ -1272,6 +1278,8 @@ func (wfe *WebFrontEndImpl) NewAccount(
 	response http.ResponseWriter,
 	request *http.Request) {
 
+	println("REQUEST WIRD")
+
 	// We use extractJWK rather than lookupJWK here because the account is not yet
 	// created, so the user provides the full key in a JWS header rather than
 	// referring to an existing key.
@@ -1280,15 +1288,19 @@ func (wfe *WebFrontEndImpl) NewAccount(
 		wfe.sendError(prob, response)
 		return
 	}
+	println("REQUEST WIRD")
 
 	// newAcctReq is the ACME account information submitted by the client
 	var newAcctReq newAccountRequest
+	println("Wir sind hier: ", string(postData.body))
 	err := json.Unmarshal(postData.body, &newAcctReq)
+
 	if err != nil {
 		wfe.sendError(
 			acme.MalformedProblem("Error unmarshaling body JSON"), response)
 		return
 	}
+	println("REQUEST WIRD")
 
 	// Lookup existing account to exit early if it exists
 	existingAcct, _ := wfe.db.GetAccountByKey(postData.jwk)
@@ -1396,6 +1408,7 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 	if order == nil {
 		return acme.InternalErrorProblem("Order is nil")
 	}
+
 	idents := order.Identifiers
 	if len(idents) == 0 {
 		return acme.MalformedProblem("Order did not specify any identifiers")
@@ -1411,12 +1424,12 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 			}
 			continue
 		}
-		if ident.Type != acme.IdentifierDNS {
+		if ident.Type != acme.IdentifierDNS && ident.Type != acme.IdentifierEK {
 			return acme.MalformedProblem(fmt.Sprintf(
 				"Order included unsupported type identifier: type %q, value %q",
 				ident.Type, ident.Value))
 		}
-
+		println("ident.value: ", ident.Value)
 		if problem := wfe.validateDNSName(ident.Value); problem != nil {
 			return problem
 		}
@@ -1634,18 +1647,22 @@ func (wfe *WebFrontEndImpl) NewOrder(
 
 	var orderDNSs []string
 	var orderIPs []net.IP
+	var orderEKs []string
 	for _, ident := range newOrder.Identifiers {
 		switch ident.Type {
 		case acme.IdentifierDNS:
 			orderDNSs = append(orderDNSs, ident.Value)
 		case acme.IdentifierIP:
 			orderIPs = append(orderIPs, net.ParseIP(ident.Value))
+		case acme.IdentifierEK:
+			orderEKs = append(orderEKs, ident.Value)
 		default:
 			wfe.sendError(acme.MalformedProblem(
 				fmt.Sprintf("Order includes unknown identifier type %s", ident.Type)), response)
 			return
 		}
 	}
+	println(orderEKs)
 	orderDNSs = uniqueLowerNames(orderDNSs)
 	orderIPs = uniqueIPs(orderIPs)
 	var uniquenames []acme.Identifier
@@ -1655,6 +1672,10 @@ func (wfe *WebFrontEndImpl) NewOrder(
 	for _, ip := range orderIPs {
 		uniquenames = append(uniquenames, acme.Identifier{Value: ip.String(), Type: acme.IdentifierIP})
 	}
+	for _, name := range orderEKs {
+		uniquenames = append(uniquenames, acme.Identifier{Value: name, Type: acme.IdentifierEK})
+	}
+
 	expires := time.Now().AddDate(0, 0, 1)
 	order := &core.Order{
 		ID:        newToken(),
@@ -1798,13 +1819,11 @@ func (wfe *WebFrontEndImpl) Order(
 	}
 }
 
-func (wfe *WebFrontEndImpl) FinalizeOrder(
-	ctx context.Context,
-	response http.ResponseWriter,
-	request *http.Request) {
+func (wfe *WebFrontEndImpl) FinalizeOrder(ctx context.Context, response http.ResponseWriter, request *http.Request) {
 
 	// Verify the POST request
 	postData, prob := wfe.verifyPOST(request, wfe.lookupJWK)
+	println("HIER SOLLTE DIE WEBSITE SEIN")
 	if prob != nil {
 		wfe.sendError(prob, response)
 		return
@@ -1817,6 +1836,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder(
 		return
 	}
 
+	//Hier: CSR Handhabung .... Nicht sicher ob Anfang
 	// Find the order specified by the order ID
 	orderID := strings.TrimPrefix(request.URL.Path, orderFinalizePath)
 	existingOrder := wfe.db.GetOrderByID(orderID)
@@ -1838,7 +1858,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder(
 	// returning
 	existingOrder.RUnlock()
 
-	if orderAccountID != existingAcct.ID {
+	if orderAccountID != existingAcct.ID { //hier: Signatur prüfen und Funktion erweitern
 		response.WriteHeader(http.StatusForbidden)
 		wfe.sendError(acme.UnauthorizedProblem(
 			"Account that authenticated the request does not own the specified order"), response)
@@ -2486,6 +2506,10 @@ func uniqueIPs(IPs []net.IP) []net.IP {
 		return bytes.Compare(results[i], results[j]) < 0
 	})
 	return results
+}
+
+func uniqueEKs(eks string) []string {
+	return db.NewMemoryStore().GetDNSByEK(eks)
 }
 
 // RevokeCert revokes an ACME certificate.

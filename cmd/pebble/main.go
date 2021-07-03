@@ -32,6 +32,7 @@ type config struct {
 }
 
 func main() {
+	println("Es geht los")
 	configFile := flag.String(
 		"config",
 		"test/config/pebble-config.json",
@@ -50,6 +51,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	println("erster Break")
+
 	// Log to stdout
 	logger := log.New(os.Stdout, "Pebble ", log.LstdFlags)
 	logger.Printf("Starting Pebble ACME server")
@@ -58,11 +61,14 @@ func main() {
 	err := cmd.ReadConfigFile(*configFile, &c)
 	cmd.FailOnError(err, "Reading JSON config file into config structure")
 
+	// solange nicht positiver Wert uninteressant.
 	alternateRoots := 0
 	alternateRootsVal := os.Getenv("PEBBLE_ALTERNATE_ROOTS")
 	if val, err := strconv.ParseInt(alternateRootsVal, 10, 0); err == nil && val >= 0 {
 		alternateRoots = int(val)
 	}
+	println("Main programm")
+	println(alternateRootsVal)
 
 	chainLength := 1
 	if val, err := strconv.ParseInt(os.Getenv("PEBBLE_CHAIN_LENGTH"), 10, 0); err == nil && val >= 0 {

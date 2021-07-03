@@ -349,6 +349,8 @@ func (va VAImpl) validateTLSALPN01(task *vaTask) *core.ValidationRecord {
 		serverNameIdentifier = task.Identifier.Value
 	case acme.IdentifierIP:
 		serverNameIdentifier = reverseaddr(task.Identifier.Value)
+	case acme.IdentifierEK:
+		serverNameIdentifier = task.Identifier.Value // TODO: prüfen ob stimmt
 	}
 	result := &core.ValidationRecord{
 		URL:         net.JoinHostPort(task.Identifier.Value, portString),

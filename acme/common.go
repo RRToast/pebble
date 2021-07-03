@@ -14,10 +14,12 @@ const (
 
 	IdentifierDNS = "dns"
 	IdentifierIP  = "ip"
+	IdentifierEK  = "ek"
 
 	ChallengeHTTP01    = "http-01"
 	ChallengeTLSALPN01 = "tls-alpn-01"
 	ChallengeDNS01     = "dns-01"
+	ChallengeEK        = "ek-01"
 
 	HTTP01BaseURL = ".well-known/acme-challenge/"
 
