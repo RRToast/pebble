@@ -116,6 +116,23 @@ const (
 	defaultOrdersPerPage = 3
 )
 
+func tpmcheck() {
+	params := ActivationParameters{
+		TPMVersion: TPMVersion20,
+		AK: AttestationParameters{
+			Public:            decodeBase64("AAEACwAFAHIAAAAQABQACwgAAAAAAAEAx8gUY6VLFyNYAbDV2zP2KexG8ZfSDsyeD9F/Zc9UkHHmtHEoC+0r5rhAz1qv+hO0zh4ePh1sdgdyRdrcom2QV8psDeYIw3jqyuAsVGOyz2Kq4ijdmIri+Afpa92GysXc5b0mepJZJuknjgyP3duHNL3N/bMnnB4QNMJwJB/L1Ke4LI2N79Tmr7KF5lX6qQBgEmNWub+l6T9miodpg3QPT4QMvSHPj/VxpT/wblpEPjYuVTam8RV73X/0gVOjVgkY9zIl56IPj9hALepEwcVa+oiA7ClTgjEYIloH7ODSc1rvFDVZgXgPRABdLSc9puBsDuxjIyrd9Hfb3TNHtM3UXw==", t),
+			CreateData:        decodeBase64("AAAAAAAg47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFUBAAsAIgAL3WVUcd/LP+TLSwYd0gKdfJywZMe/2004SrJIgY6AzSkAIgALO57Ujqu4kZDgwkmA/JYEh+sFOZH+nGjduGCxmUQ17WgAAA==", t),
+			CreateAttestation: decodeBase64("/1RDR4AaACIAC4ppduq4DWTZ78zUiZfINTzC4tJoBATqWTlyGqgOY6TbAAAAAAAADxWoQZtckSW08l1sAfPQhEEdV52qACIACwc8G+tMkNshZ17IW33rMNp7GXvv3PH4pj+fop+HEwCxACBD93t2ieV9GYkZgflA23yMXbrqEVTFs4hJ5ktJ4PF/EA==", t),
+			CreateSignature:   decodeBase64("ABQACwEAlBKPQx/GEebRbhBUpjGQiifmUk7k6LgFvPk7DqV8De1fzLERxBYhsJ5E6NEd/KLqtEXld32gO4rUmvFDtMqM4TdsV0TpOFxnwSLefv5hTZqcF1rphzASS63F9YoYhoUIVuCS8SH9mD8DF91v49Uc9r5SJTrCCmSJiKIFEc7YYTChJfGug4Ta96HbRrtKrhagDL3yFenBbnhD9ObjUid16htHVaC479BOEJwJ/V0NilLs35SrLvuU8khA3D+gfWGsdTiQikGrfUtdQa+suQtFAQsbuBtSOkL0jC6vr7GXNLzuFMsZJa6xr+LSUdZENxtQWrA4ZyvpgttIHhGyE3Gq7A==", t),
+		},
+		EK: &rsa.PublicKey{
+			E: priv.E,
+			N: priv.N,
+		},
+		Rand: rand,
+	}
+}
+
 // newAccountRequest is the ACME account information submitted by the client
 type newAccountRequest struct {
 	Contact            []string `json:"contact"`
@@ -1429,9 +1446,18 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 				"Order included unsupported type identifier: type %q, value %q",
 				ident.Type, ident.Value))
 		}
-		println("ident.value: ", ident.Value)
-		if problem := wfe.validateDNSName(ident.Value); problem != nil {
-			return problem
+		if ident.Type != acme.IdentifierEK {
+			if problem := wfe.validateDNSName(ident.Value); problem != nil {
+				return problem
+			}
+		} else {
+			println("Wir haben hier so viele _ :", strings.Count(ident.Value, " "))
+			pos := strings.Index(ident.Value, "-----BEGIN")
+			AkValue := ident.Value[:pos]
+			EkValue := ident.Value[pos+1:]
+			println("Hier haben wir den AkValue:", AkValue)
+			println("hier haben wir den Ek value:", EkValue)
+			//db.checkEK(EkValue)
 		}
 	}
 	return nil
@@ -1645,6 +1671,8 @@ func (wfe *WebFrontEndImpl) NewOrder(
 		return
 	}
 
+	println("Der Fehler ist :")
+
 	var orderDNSs []string
 	var orderIPs []net.IP
 	var orderEKs []string
@@ -1662,6 +1690,8 @@ func (wfe *WebFrontEndImpl) NewOrder(
 			return
 		}
 	}
+	println("hier")
+
 	println(orderEKs)
 	orderDNSs = uniqueLowerNames(orderDNSs)
 	orderIPs = uniqueIPs(orderIPs)

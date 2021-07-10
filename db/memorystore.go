@@ -79,6 +79,15 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
+func (m *MemoryStore) checkEK(ek string) bool {
+	m.RLock()
+	defer m.RUnlock()
+	if ek == "TestEKValue" {
+		return true
+	}
+	return false
+}
+
 func (m *MemoryStore) GetDNSByEK(ek string) []string {
 	m.RLock()
 	defer m.RUnlock()
