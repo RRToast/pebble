@@ -26,7 +26,7 @@ Create a challenge server responding to HTTP-01 challenges on ":8888" and
 DNS-01 challenges on ":9999" and "10.0.0.1:9998":
 
 ```
-  import "github.com/letsencrypt/pebble/challtestsrv"
+  import "github.com/RRToast/pebble/challtestsrv"
 
   challSrv, err := challtestsrv.New(challsrv.Config{
     HTTPOneAddr: []string{":8888"},

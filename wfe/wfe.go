@@ -28,11 +28,11 @@ import (
 
 	"gopkg.in/square/go-jose.v2"
 
-	"github.com/letsencrypt/pebble/acme"
-	"github.com/letsencrypt/pebble/ca"
-	"github.com/letsencrypt/pebble/core"
-	"github.com/letsencrypt/pebble/db"
-	"github.com/letsencrypt/pebble/va"
+	"github.com/RRToast/pebble/acme"
+	"github.com/RRToast/pebble/ca"
+	"github.com/RRToast/pebble/core"
+	"github.com/RRToast/pebble/db"
+	"github.com/RRToast/pebble/va"
 )
 
 const (
@@ -116,10 +116,40 @@ const (
 	defaultOrdersPerPage = 3
 )
 
-func tpmcheck() {
-	params := ActivationParameters{
-		TPMVersion: TPMVersion20,
-		AK: AttestationParameters{
+func trimBrakets(s string) string {
+	if len(s) > 0 && s[0] == '{' {
+		s = s[1:]
+	}
+	if len(s) > 0 && s[len(s)-1] == '}' {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
+func extractAK(ak string) (Public string, CreateData string, CreateAttestation string, CreateSignature string) {
+	ak = trimBrakets(ak)
+	pos := strings.Index(ak, ",")
+	Public = ak[:pos]
+	ak = ak[pos+1:]
+	pos = strings.Index(ak, ",")
+	CreateData = ak[:pos]
+	ak = ak[pos+1:]
+	pos = strings.Index(ak, ",")
+	CreateAttestation = ak[:pos]
+	CreateSignature = ak[pos+1:]
+
+	println("Public:", Public)
+	println("CreateData:", CreateData)
+	println("CreateAttestation:", CreateAttestation)
+	println("CreateSignature:", CreateSignature)
+	return Public, CreateData, CreateAttestation, CreateSignature
+}
+
+/* func tpmcheck(string ak, string ek) {
+
+	 	params := attest.ActivationParameters{
+		TPMVersion: attest.TPMVersion20,
+		AK: attest.AttestationParameters{
 			Public:            decodeBase64("AAEACwAFAHIAAAAQABQACwgAAAAAAAEAx8gUY6VLFyNYAbDV2zP2KexG8ZfSDsyeD9F/Zc9UkHHmtHEoC+0r5rhAz1qv+hO0zh4ePh1sdgdyRdrcom2QV8psDeYIw3jqyuAsVGOyz2Kq4ijdmIri+Afpa92GysXc5b0mepJZJuknjgyP3duHNL3N/bMnnB4QNMJwJB/L1Ke4LI2N79Tmr7KF5lX6qQBgEmNWub+l6T9miodpg3QPT4QMvSHPj/VxpT/wblpEPjYuVTam8RV73X/0gVOjVgkY9zIl56IPj9hALepEwcVa+oiA7ClTgjEYIloH7ODSc1rvFDVZgXgPRABdLSc9puBsDuxjIyrd9Hfb3TNHtM3UXw==", t),
 			CreateData:        decodeBase64("AAAAAAAg47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFUBAAsAIgAL3WVUcd/LP+TLSwYd0gKdfJywZMe/2004SrJIgY6AzSkAIgALO57Ujqu4kZDgwkmA/JYEh+sFOZH+nGjduGCxmUQ17WgAAA==", t),
 			CreateAttestation: decodeBase64("/1RDR4AaACIAC4ppduq4DWTZ78zUiZfINTzC4tJoBATqWTlyGqgOY6TbAAAAAAAADxWoQZtckSW08l1sAfPQhEEdV52qACIACwc8G+tMkNshZ17IW33rMNp7GXvv3PH4pj+fop+HEwCxACBD93t2ieV9GYkZgflA23yMXbrqEVTFs4hJ5ktJ4PF/EA==", t),
@@ -131,7 +161,7 @@ func tpmcheck() {
 		},
 		Rand: rand,
 	}
-}
+} */
 
 // newAccountRequest is the ACME account information submitted by the client
 type newAccountRequest struct {
@@ -1453,11 +1483,17 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 		} else {
 			println("Wir haben hier so viele _ :", strings.Count(ident.Value, " "))
 			pos := strings.Index(ident.Value, "-----BEGIN")
-			AkValue := ident.Value[:pos]
-			EkValue := ident.Value[pos+1:]
-			println("Hier haben wir den AkValue:", AkValue)
-			println("hier haben wir den Ek value:", EkValue)
-			//db.checkEK(EkValue)
+			// AkValue := ident.Value[:pos]
+			EkValue := ident.Value[pos:]
+			/* println("Hier haben wir den AkValue:", AkValue)
+			println("hier haben wir den Ek value:", EkValue) */
+			// t := strings.ReplaceAll(EkValue, " ", "")
+			EkValue = strings.ReplaceAll(EkValue, "\n", "")
+			if !db.NewMemoryStore().CheckEK(EkValue) {
+				return acme.MalformedProblem(fmt.Sprintf(
+					"Order included an illegal EK Cert: %q",
+					EkValue))
+			}
 		}
 	}
 	return nil
