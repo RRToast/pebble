@@ -1163,10 +1163,7 @@ func (wfe *WebFrontEndImpl) makeAuthorizations(order *core.Order, request *http.
 	return nil
 }
 
-func (wfe *WebFrontEndImpl) makeChallenge(
-	chalType string,
-	authz *core.Authorization,
-	request *http.Request) (*core.Challenge, error) {
+func (wfe *WebFrontEndImpl) makeChallenge(chalType string, authz *core.Authorization, request *http.Request) (*core.Challenge, error) {
 	// Create a new challenge of the requested type
 	id := newToken()
 	chal := &core.Challenge{

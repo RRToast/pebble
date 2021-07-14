@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	base "encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -33,6 +34,7 @@ import (
 	"github.com/RRToast/pebble/core"
 	"github.com/RRToast/pebble/db"
 	"github.com/RRToast/pebble/va"
+	attest "github.com/google/go-attestation/attest"
 )
 
 const (
@@ -128,40 +130,95 @@ func trimBrakets(s string) string {
 
 func extractAK(ak string) (Public string, CreateData string, CreateAttestation string, CreateSignature string) {
 	ak = trimBrakets(ak)
-	pos := strings.Index(ak, ",")
-	Public = ak[:pos]
-	ak = ak[pos+1:]
-	pos = strings.Index(ak, ",")
-	CreateData = ak[:pos]
-	ak = ak[pos+1:]
-	pos = strings.Index(ak, ",")
-	CreateAttestation = ak[:pos]
-	CreateSignature = ak[pos+1:]
 
-	println("Public:", Public)
-	println("CreateData:", CreateData)
-	println("CreateAttestation:", CreateAttestation)
-	println("CreateSignature:", CreateSignature)
+	arr := strings.Split(ak, ",")
+
+	pos := strings.Index(arr[2], ":\"")
+	poss := strings.Index(arr[2], "==\"")
+	Public = arr[2][pos+2 : poss+2]
+
+	pos = strings.Index(arr[3], ":\"")
+	poss = strings.Index(arr[3], "==\"")
+	CreateData = arr[3][pos+2 : poss+2]
+
+	pos = strings.Index(arr[4], ":\"")
+	poss = strings.Index(arr[4], "==\"")
+	CreateAttestation = arr[4][pos+2 : poss+2]
+
+	pos = strings.Index(arr[5], ":\"")
+	poss = strings.Index(arr[5], "==\"")
+	CreateSignature = arr[5][pos+2 : poss+2]
+	/*
+		println("Doppelcheck ob alles passt:")
+		println("Public:", Public)
+		println("CreateData:", CreateData)
+		println("CreateAttestation:", CreateAttestation)
+		println("CreateSignature:", CreateSignature) */
 	return Public, CreateData, CreateAttestation, CreateSignature
 }
 
-/* func tpmcheck(string ak, string ek) {
+var globSecret = []byte{}
+var globCredential = attest.EncryptedCredential{}
 
-	 	params := attest.ActivationParameters{
+const pubPEM = `
+-----BEGIN RSA PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAh2oOFWso2nWgrA/6SIcJ
+xznL4ZHw1rVnphcqYVChhzC8tXdZ6eZmPWbIP4xgKtZsYSAkPbo1Lf3dPFlA+G5W
+xuXpE5QRn1bIo3Rx0CxLwduy/z7Eak8HNI32eb1U2jPYqCMCeLRStNjNnqZEoji4
+//cqss1B1pXWJCH8VckfpSiXBvA+0Jyk5ceY83VCVYoKBwLVhRnTEFI2TeWUOFDn
+136c85//Yd+Mohx9aoTyYTiC84ePO/sJoNdKaFl8JjgsqxYPFxcCguzeCacvA/Jr
+Ps853EG0Sl52FuBj21CeB8QJUrNpabT/kFM9kBW6HQvWEgASvO0FTJ42lCx80Ecv
+mQIDAQAB
+-----END RSA PUBLIC KEY-----`
+
+func getEkPublicKey(ek string) crypto.PrivateKey {
+	block, _ := pem.Decode([]byte(pubPEM))
+	if block == nil {
+		panic("failed to parse PEM block containing the public key")
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		panic("failed to parse DER encoded public key: " + err.Error())
+	}
+
+	return pub
+}
+
+func createEkCheck(ak string, ek string) {
+	public, createData, createAttestation, createSignature := extractAK(ak)
+
+	encode := base.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+	bpublic, err := encode.DecodeString(public)
+	if err != nil {
+		println("Der Fehler entsteht schon hier")
+	}
+	bcreateData, _ := encode.DecodeString(createData)
+	bcreateAttestation, _ := encode.DecodeString(createAttestation)
+	bcreateSignature, _ := encode.DecodeString(createSignature)
+
+	params := attest.ActivationParameters{
 		TPMVersion: attest.TPMVersion20,
 		AK: attest.AttestationParameters{
-			Public:            decodeBase64("AAEACwAFAHIAAAAQABQACwgAAAAAAAEAx8gUY6VLFyNYAbDV2zP2KexG8ZfSDsyeD9F/Zc9UkHHmtHEoC+0r5rhAz1qv+hO0zh4ePh1sdgdyRdrcom2QV8psDeYIw3jqyuAsVGOyz2Kq4ijdmIri+Afpa92GysXc5b0mepJZJuknjgyP3duHNL3N/bMnnB4QNMJwJB/L1Ke4LI2N79Tmr7KF5lX6qQBgEmNWub+l6T9miodpg3QPT4QMvSHPj/VxpT/wblpEPjYuVTam8RV73X/0gVOjVgkY9zIl56IPj9hALepEwcVa+oiA7ClTgjEYIloH7ODSc1rvFDVZgXgPRABdLSc9puBsDuxjIyrd9Hfb3TNHtM3UXw==", t),
-			CreateData:        decodeBase64("AAAAAAAg47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFUBAAsAIgAL3WVUcd/LP+TLSwYd0gKdfJywZMe/2004SrJIgY6AzSkAIgALO57Ujqu4kZDgwkmA/JYEh+sFOZH+nGjduGCxmUQ17WgAAA==", t),
-			CreateAttestation: decodeBase64("/1RDR4AaACIAC4ppduq4DWTZ78zUiZfINTzC4tJoBATqWTlyGqgOY6TbAAAAAAAADxWoQZtckSW08l1sAfPQhEEdV52qACIACwc8G+tMkNshZ17IW33rMNp7GXvv3PH4pj+fop+HEwCxACBD93t2ieV9GYkZgflA23yMXbrqEVTFs4hJ5ktJ4PF/EA==", t),
-			CreateSignature:   decodeBase64("ABQACwEAlBKPQx/GEebRbhBUpjGQiifmUk7k6LgFvPk7DqV8De1fzLERxBYhsJ5E6NEd/KLqtEXld32gO4rUmvFDtMqM4TdsV0TpOFxnwSLefv5hTZqcF1rphzASS63F9YoYhoUIVuCS8SH9mD8DF91v49Uc9r5SJTrCCmSJiKIFEc7YYTChJfGug4Ta96HbRrtKrhagDL3yFenBbnhD9ObjUid16htHVaC479BOEJwJ/V0NilLs35SrLvuU8khA3D+gfWGsdTiQikGrfUtdQa+suQtFAQsbuBtSOkL0jC6vr7GXNLzuFMsZJa6xr+LSUdZENxtQWrA4ZyvpgttIHhGyE3Gq7A==", t),
+
+			Public:            bpublic,
+			CreateData:        bcreateData,
+			CreateAttestation: bcreateAttestation,
+			CreateSignature:   bcreateSignature,
 		},
-		EK: &rsa.PublicKey{
-			E: priv.E,
-			N: priv.N,
-		},
-		Rand: rand,
+		EK: getEkPublicKey(ek),
 	}
-} */
+	secret, encryptedCredentials, err := params.Generate() // hier encryptedCredentials weggelassen weil nicht klar wofür
+	if err != nil {
+		println("Ekchallenge could not be generated")
+		panic(err)
+	}
+
+	println("HIER wurde das secret generiert: ", secret)
+	globSecret = secret
+	globCredential = *encryptedCredentials
+
+}
 
 // newAccountRequest is the ACME account information submitted by the client
 type newAccountRequest struct {
@@ -863,9 +920,7 @@ type authenticatedPOST struct {
 // NOTE: Unlike `verifyPOST` from the Boulder WFE this version does not
 // presently handle the `regCheck` parameter or do any lookups for existing
 // accounts.
-func (wfe *WebFrontEndImpl) verifyPOST(
-	request *http.Request,
-	kx keyExtractor) (*authenticatedPOST, *acme.ProblemDetails) {
+func (wfe *WebFrontEndImpl) verifyPOST(request *http.Request, kx keyExtractor) (*authenticatedPOST, *acme.ProblemDetails) {
 
 	if prob := wfe.validPOST(request); prob != nil {
 		return nil, prob
@@ -897,9 +952,7 @@ func (wfe *WebFrontEndImpl) verifyPOST(
 
 // verifyJWSSignatureAndAlgorithm verifies the pubkey and JWS algorithms are
 // acceptable and that the JWS verifies with the provided pubkey.
-func (wfe *WebFrontEndImpl) verifyJWSSignatureAndAlgorithm(
-	pubKey *jose.JSONWebKey,
-	parsedJWS *jose.JSONWebSignature) ([]byte, *acme.ProblemDetails) {
+func (wfe *WebFrontEndImpl) verifyJWSSignatureAndAlgorithm(pubKey *jose.JSONWebKey, parsedJWS *jose.JSONWebSignature) ([]byte, *acme.ProblemDetails) {
 	if prob := checkAlgorithm(pubKey, parsedJWS); prob != nil {
 		return nil, prob
 	}
@@ -922,10 +975,7 @@ func (wfe *WebFrontEndImpl) extractJWSURL(
 	return headerURL, true
 }
 
-func (wfe *WebFrontEndImpl) verifyJWS(
-	pubKey *jose.JSONWebKey,
-	parsedJWS *jose.JSONWebSignature,
-	request *http.Request) (*authenticatedPOST, *acme.ProblemDetails) {
+func (wfe *WebFrontEndImpl) verifyJWS(pubKey *jose.JSONWebKey, parsedJWS *jose.JSONWebSignature, request *http.Request) (*authenticatedPOST, *acme.ProblemDetails) {
 	payload, prob := wfe.verifyJWSSignatureAndAlgorithm(pubKey, parsedJWS)
 	if prob != nil {
 		return nil, prob
@@ -1483,7 +1533,7 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 		} else {
 			println("Wir haben hier so viele _ :", strings.Count(ident.Value, " "))
 			pos := strings.Index(ident.Value, "-----BEGIN")
-			// AkValue := ident.Value[:pos]
+			AkValue := ident.Value[:pos]
 			EkValue := ident.Value[pos:]
 			/* println("Hier haben wir den AkValue:", AkValue)
 			println("hier haben wir den Ek value:", EkValue) */
@@ -1494,6 +1544,7 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 					"Order included an illegal EK Cert: %q",
 					EkValue))
 			}
+			createEkCheck(AkValue, EkValue)
 		}
 	}
 	return nil
@@ -1617,19 +1668,20 @@ func (wfe *WebFrontEndImpl) makeAuthorizations(order *core.Order, request *http.
 	return nil
 }
 
-func (wfe *WebFrontEndImpl) makeChallenge(
-	chalType string,
-	authz *core.Authorization,
-	request *http.Request) (*core.Challenge, error) {
+func (wfe *WebFrontEndImpl) makeChallenge(chalType string, authz *core.Authorization, request *http.Request) (*core.Challenge, error) {
 	// Create a new challenge of the requested type
+	if chalType == acme.ChallengeEK {
+		println("Eyyyyy hier kommt warscheinlich die Challange rein :)")
+	}
 	id := newToken()
 	chal := &core.Challenge{
 		ID: id,
 		Challenge: acme.Challenge{
-			Type:   chalType,
-			Token:  newToken(),
-			URL:    wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", challengePath, id)),
-			Status: acme.StatusPending,
+			Type:     chalType,
+			Token:    newToken(),
+			URL:      wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", challengePath, id)),
+			Status:   acme.StatusPending,
+			EkSecret: globCredential,
 		},
 		Authz: authz,
 	}
@@ -1660,6 +1712,8 @@ func (wfe *WebFrontEndImpl) makeChallenges(authz *core.Authorization, request *h
 		var enabledChallenges []string
 		if authz.Identifier.Type == acme.IdentifierIP {
 			enabledChallenges = []string{acme.ChallengeHTTP01, acme.ChallengeTLSALPN01}
+		} else if authz.Identifier.Type == acme.IdentifierEK {
+			enabledChallenges = []string{acme.ChallengeEK}
 		} else {
 			// Non-wildcard, non-IP identifier authorizations get all of the enabled challenge types
 			enabledChallenges = []string{acme.ChallengeHTTP01, acme.ChallengeTLSALPN01, acme.ChallengeDNS01}

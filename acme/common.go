@@ -1,5 +1,7 @@
 package acme
 
+import attest "github.com/google/go-attestation/attest"
+
 // acme.Resource values identify different types of ACME resources
 type Resource string
 
@@ -84,4 +86,5 @@ type Challenge struct {
 	Status    string          `json:"status"`
 	Validated string          `json:"validated,omitempty"`
 	Error     *ProblemDetails `json:"error,omitempty"`
+	EkSecret  attest.EncryptedCredential
 }
