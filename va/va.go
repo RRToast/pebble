@@ -297,10 +297,40 @@ func (va VAImpl) performValidation(task *vaTask, results chan<- *core.Validation
 		results <- va.validateTLSALPN01(task)
 	case acme.ChallengeDNS01:
 		results <- va.validateDNS01(task)
+	case acme.ChallengeEK:
+		results <- va.validateEk(task)
 	default:
 		va.log.Printf("Error: performValidation(): Invalid challenge type: %q", task.Challenge.Type)
 	}
 }
+
+func (va VAImpl) validateEk(task *vaTask) *core.ValidationRecord {
+	const ekPrefix = "_acme-challenge"
+	challengeSubdomain := fmt.Sprintf("%s.%s", ekPrefix, task.Identifier.Value)
+
+	result := &core.ValidationRecord{
+		URL:         challengeSubdomain,
+		ValidatedAt: time.Now(),
+	}
+
+	bServerSecret, _ := ioutil.ReadFile("SecretStore")
+	bClientSecret, _ := ioutil.ReadFile("SecretClient")
+
+	if string(bServerSecret) != string(bClientSecret) {
+		msg := fmt.Sprintf("Secrets differed, no validation happend")
+		result.Error = acme.UnauthorizedProblem(msg)
+		return result
+	}
+
+	return result
+}
+
+/* func (va VAImpl) compareSecret(clientSecret string) (bool, error) {
+	if db.NewMemoryStore().GetSecret() == "" {
+		println("DATABASE ENTRY IS EMPTY, Wert nicht vorhanden")
+	}
+	return db.NewMemoryStore().GetSecret() == clientSecret, nil
+} */
 
 func (va VAImpl) validateDNS01(task *vaTask) *core.ValidationRecord {
 	const dns01Prefix = "_acme-challenge"

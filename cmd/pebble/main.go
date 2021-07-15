@@ -51,8 +51,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	println("erster Break")
-
 	// Log to stdout
 	logger := log.New(os.Stdout, "Pebble ", log.LstdFlags)
 	logger.Printf("Starting Pebble ACME server")
@@ -67,7 +65,6 @@ func main() {
 	if val, err := strconv.ParseInt(alternateRootsVal, 10, 0); err == nil && val >= 0 {
 		alternateRoots = int(val)
 	}
-	println("Main programm")
 	println(alternateRootsVal)
 
 	chainLength := 1

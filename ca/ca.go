@@ -71,8 +71,6 @@ func makeSubjectKeyID(key crypto.PublicKey) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	println("Howdy aus makeSubjectKeyID")
-	println(key)
 
 	// Unmarshal it again so we can extract the key bitstring bytes
 	var pubInfo struct {

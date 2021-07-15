@@ -60,6 +60,8 @@ type MemoryStore struct {
 	blockListByDomain [][]string
 
 	dnsByEK map[string]string
+
+	secret string
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -76,7 +78,16 @@ func NewMemoryStore() *MemoryStore {
 		externalAccountKeysByID: make(map[string][]byte),
 		blockListByDomain:       make([][]string, 0),
 		dnsByEK:                 make(map[string]string),
+		secret:                  "",
 	}
+}
+
+func (m *MemoryStore) UpdateSecret(newSecret string) {
+	m.secret = newSecret
+}
+
+func (m *MemoryStore) GetSecret() (dbSecret string) {
+	return m.secret
 }
 
 func (m *MemoryStore) CheckEK(ek string) bool {
@@ -89,13 +100,10 @@ func (m *MemoryStore) CheckEK(ek string) bool {
 	return false
 }
 
-func (m *MemoryStore) GetDNSByEK(ek string) []string {
+func (m *MemoryStore) GetDNSByEK(ek string) string {
 	m.RLock()
 	defer m.RUnlock()
-	if ek == "TestEKValue" {
-		return []string{"www.fakeDNS.de"}
-	}
-	return []string{""}
+	return "www.fakeDNS.de"
 }
 
 func (m *MemoryStore) GetAccountByID(id string) *core.Account {

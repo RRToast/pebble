@@ -79,7 +79,7 @@ type Authorization struct {
 }
 
 // A Challenge is used to validate an Authorization
-type Challenge struct {
+type EkChallenge struct {
 	Type      string          `json:"type"`
 	URL       string          `json:"url"`
 	Token     string          `json:"token"`
@@ -87,4 +87,14 @@ type Challenge struct {
 	Validated string          `json:"validated,omitempty"`
 	Error     *ProblemDetails `json:"error,omitempty"`
 	EkSecret  attest.EncryptedCredential
+	DNS       string
+}
+
+type Challenge struct {
+	Type      string          `json:"type"`
+	URL       string          `json:"url"`
+	Token     string          `json:"token"`
+	Status    string          `json:"status"`
+	Validated string          `json:"validated,omitempty"`
+	Error     *ProblemDetails `json:"error,omitempty"`
 }

@@ -128,6 +128,8 @@ func trimBrakets(s string) string {
 	return s
 }
 
+var globEk = ""
+
 func extractAK(ak string) (Public string, CreateData string, CreateAttestation string, CreateSignature string) {
 	ak = trimBrakets(ak)
 
@@ -148,16 +150,10 @@ func extractAK(ak string) (Public string, CreateData string, CreateAttestation s
 	pos = strings.Index(arr[5], ":\"")
 	poss = strings.Index(arr[5], "==\"")
 	CreateSignature = arr[5][pos+2 : poss+2]
-	/*
-		println("Doppelcheck ob alles passt:")
-		println("Public:", Public)
-		println("CreateData:", CreateData)
-		println("CreateAttestation:", CreateAttestation)
-		println("CreateSignature:", CreateSignature) */
 	return Public, CreateData, CreateAttestation, CreateSignature
 }
 
-var globSecret = []byte{}
+var globSecret = ""
 var globCredential = attest.EncryptedCredential{}
 
 const pubPEM = `
@@ -190,9 +186,6 @@ func createEkCheck(ak string, ek string) {
 
 	encode := base.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 	bpublic, err := encode.DecodeString(public)
-	if err != nil {
-		println("Der Fehler entsteht schon hier")
-	}
 	bcreateData, _ := encode.DecodeString(createData)
 	bcreateAttestation, _ := encode.DecodeString(createAttestation)
 	bcreateSignature, _ := encode.DecodeString(createSignature)
@@ -210,12 +203,16 @@ func createEkCheck(ak string, ek string) {
 	}
 	secret, encryptedCredentials, err := params.Generate() // hier encryptedCredentials weggelassen weil nicht klar wofür
 	if err != nil {
-		println("Ekchallenge could not be generated")
 		panic(err)
 	}
 
-	println("HIER wurde das secret generiert: ", secret)
-	globSecret = secret
+	test3 := encode.EncodeToString(secret)
+	db.NewMemoryStore().UpdateSecret(test3)
+	d1 := []byte(test3)
+	err = ioutil.WriteFile("SecretStore", d1, 0644)
+	f, err := os.Create("/tmp/dat2")
+	defer f.Close()
+	globSecret = test3
 	globCredential = *encryptedCredentials
 
 }
@@ -263,12 +260,7 @@ type WebFrontEndImpl struct {
 
 const ToSURL = "data:text/plain,Do%20what%20thou%20wilt"
 
-func New(
-	log *log.Logger,
-	db *db.MemoryStore,
-	va *va.VAImpl,
-	ca *ca.CAImpl,
-	strict, requireEAB bool) WebFrontEndImpl {
+func New(log *log.Logger, db *db.MemoryStore, va *va.VAImpl, ca *ca.CAImpl, strict, requireEAB bool) WebFrontEndImpl {
 	// Seed rand from the current time so test environments don't always have
 	// the same nonce rejection and sleep time patterns.
 	rand.Seed(time.Now().UnixNano())
@@ -332,11 +324,7 @@ func New(
 	}
 }
 
-func (wfe *WebFrontEndImpl) HandleFunc(
-	mux *http.ServeMux,
-	pattern string,
-	handler wfeHandlerFunc,
-	methods ...string) {
+func (wfe *WebFrontEndImpl) HandleFunc(mux *http.ServeMux, pattern string, handler wfeHandlerFunc, methods ...string) {
 
 	methodsMap := make(map[string]bool)
 	for _, m := range methods {
@@ -633,7 +621,6 @@ func (wfe *WebFrontEndImpl) Directory(
 	ctx context.Context,
 	response http.ResponseWriter,
 	request *http.Request) {
-	println(wfe)
 
 	directoryEndpoints := map[string]string{
 		"newNonce":   noncePath,
@@ -1048,7 +1035,6 @@ func isASCII(str string) bool {
 }
 
 func (wfe *WebFrontEndImpl) verifyContacts(acct acme.Account) *acme.ProblemDetails {
-	println("WASS")
 	contacts := acct.Contact
 
 	// Providing no Contacts is perfectly acceptable
@@ -1067,11 +1053,9 @@ func (wfe *WebFrontEndImpl) verifyContacts(acct acme.Account) *acme.ProblemDetai
 			return acme.InvalidContactProblem(fmt.Sprintf("contact %q is invalid", c))
 		}
 		if parsed.Scheme != "mailto" {
-			println("Tatsächlich das Shema ist schuld")
 			return acme.UnsupportedContactProblem(fmt.Sprintf(
 				"contact method %q is not supported", parsed.Scheme))
 		}
-		println("WASS")
 		email := parsed.Opaque
 		// An empty or omitted Contact array should be used instead of an empty contact
 		if email == "" {
@@ -1324,7 +1308,6 @@ func (wfe *WebFrontEndImpl) KeyRollover(
 	}
 
 	newPubKey, prob := wfe.extractJWK(request, parsedInnerJWS)
-	println(prob.Detail)
 	if prob != nil {
 		wfe.sendError(prob, response)
 		return
@@ -1375,8 +1358,6 @@ func (wfe *WebFrontEndImpl) NewAccount(
 	response http.ResponseWriter,
 	request *http.Request) {
 
-	println("REQUEST WIRD")
-
 	// We use extractJWK rather than lookupJWK here because the account is not yet
 	// created, so the user provides the full key in a JWS header rather than
 	// referring to an existing key.
@@ -1385,11 +1366,9 @@ func (wfe *WebFrontEndImpl) NewAccount(
 		wfe.sendError(prob, response)
 		return
 	}
-	println("REQUEST WIRD")
 
 	// newAcctReq is the ACME account information submitted by the client
 	var newAcctReq newAccountRequest
-	println("Wir sind hier: ", string(postData.body))
 	err := json.Unmarshal(postData.body, &newAcctReq)
 
 	if err != nil {
@@ -1397,7 +1376,6 @@ func (wfe *WebFrontEndImpl) NewAccount(
 			acme.MalformedProblem("Error unmarshaling body JSON"), response)
 		return
 	}
-	println("REQUEST WIRD")
 
 	// Lookup existing account to exit early if it exists
 	existingAcct, _ := wfe.db.GetAccountByKey(postData.jwk)
@@ -1531,19 +1509,16 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 				return problem
 			}
 		} else {
-			println("Wir haben hier so viele _ :", strings.Count(ident.Value, " "))
 			pos := strings.Index(ident.Value, "-----BEGIN")
 			AkValue := ident.Value[:pos]
 			EkValue := ident.Value[pos:]
-			/* println("Hier haben wir den AkValue:", AkValue)
-			println("hier haben wir den Ek value:", EkValue) */
-			// t := strings.ReplaceAll(EkValue, " ", "")
 			EkValue = strings.ReplaceAll(EkValue, "\n", "")
 			if !db.NewMemoryStore().CheckEK(EkValue) {
 				return acme.MalformedProblem(fmt.Sprintf(
 					"Order included an illegal EK Cert: %q",
 					EkValue))
 			}
+			globEk = EkValue
 			createEkCheck(AkValue, EkValue)
 		}
 	}
@@ -1670,20 +1645,34 @@ func (wfe *WebFrontEndImpl) makeAuthorizations(order *core.Order, request *http.
 
 func (wfe *WebFrontEndImpl) makeChallenge(chalType string, authz *core.Authorization, request *http.Request) (*core.Challenge, error) {
 	// Create a new challenge of the requested type
-	if chalType == acme.ChallengeEK {
-		println("Eyyyyy hier kommt warscheinlich die Challange rein :)")
-	}
+
 	id := newToken()
-	chal := &core.Challenge{
-		ID: id,
-		Challenge: acme.Challenge{
-			Type:     chalType,
-			Token:    newToken(),
-			URL:      wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", challengePath, id)),
-			Status:   acme.StatusPending,
-			EkSecret: globCredential,
-		},
-		Authz: authz,
+	chal := &core.Challenge{}
+	if chalType == acme.ChallengeEK {
+		chal = &core.Challenge{
+			ID: id,
+			EkChallenge: acme.EkChallenge{
+				Type:     chalType,
+				Token:    newToken(),
+				URL:      wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", challengePath, id)),
+				Status:   acme.StatusPending,
+				EkSecret: globCredential,
+				DNS:      wfe.db.GetDNSByEK(globEk),
+			},
+			Authz: authz,
+		}
+	} else {
+		chal = &core.Challenge{
+			ID: id,
+			Challenge: acme.Challenge{
+				Type:   chalType,
+				Token:  newToken(),
+				URL:    wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", challengePath, id)),
+				Status: acme.StatusPending,
+			},
+			Authz: authz,
+		}
+
 	}
 
 	// Add it to the in-memory database
@@ -1761,8 +1750,6 @@ func (wfe *WebFrontEndImpl) NewOrder(
 		return
 	}
 
-	println("Der Fehler ist :")
-
 	var orderDNSs []string
 	var orderIPs []net.IP
 	var orderEKs []string
@@ -1780,9 +1767,7 @@ func (wfe *WebFrontEndImpl) NewOrder(
 			return
 		}
 	}
-	println("hier")
 
-	println(orderEKs)
 	orderDNSs = uniqueLowerNames(orderDNSs)
 	orderIPs = uniqueIPs(orderIPs)
 	var uniquenames []acme.Identifier
@@ -1854,9 +1839,7 @@ func (wfe *WebFrontEndImpl) NewOrder(
 // orderForDisplay preps a *core.Order for display by populating some fields
 // based on the http.request provided and returning a *acme.Order ready to be
 // rendered to JSON for display to an API client.
-func (wfe *WebFrontEndImpl) orderForDisplay(
-	order *core.Order,
-	request *http.Request) acme.Order {
+func (wfe *WebFrontEndImpl) orderForDisplay(order *core.Order, request *http.Request) acme.Order {
 	// Lock the order for reading
 	order.RLock()
 	defer order.RUnlock()
@@ -1943,7 +1926,6 @@ func (wfe *WebFrontEndImpl) FinalizeOrder(ctx context.Context, response http.Res
 
 	// Verify the POST request
 	postData, prob := wfe.verifyPOST(request, wfe.lookupJWK)
-	println("HIER SOLLTE DIE WEBSITE SEIN")
 	if prob != nil {
 		wfe.sendError(prob, response)
 		return
@@ -2248,6 +2230,10 @@ func (wfe *WebFrontEndImpl) Challenge(
 		return
 	}
 
+	test := strings.Split(string(postData.body), "\"")
+	d1 := []byte(test[3])
+	ioutil.WriteFile("SecretClient", d1, 0644)
+
 	chalID := strings.TrimPrefix(request.URL.Path, challengePath)
 	chal := wfe.db.GetChallengeByID(chalID)
 	if chal == nil {
@@ -2334,7 +2320,7 @@ func (wfe *WebFrontEndImpl) validateAuthzForChallenge(authz *core.Authorization)
 	defer authz.RUnlock()
 
 	ident := authz.Identifier
-	if ident.Type != acme.IdentifierDNS && ident.Type != acme.IdentifierIP {
+	if ident.Type != acme.IdentifierDNS && ident.Type != acme.IdentifierIP && ident.Type != acme.IdentifierEK {
 		return nil, acme.MalformedProblem(
 			fmt.Sprintf("Authorization identifier was type %s, only %s and %s are supported",
 				ident.Type, acme.IdentifierDNS, acme.IdentifierIP))
