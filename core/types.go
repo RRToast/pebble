@@ -126,7 +126,6 @@ type Authorization struct {
 type Challenge struct {
 	sync.RWMutex
 	acme.Challenge
-	acme.EkChallenge
 	ID            string
 	Authz         *Authorization
 	ValidatedDate time.Time

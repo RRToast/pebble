@@ -1651,7 +1651,7 @@ func (wfe *WebFrontEndImpl) makeChallenge(chalType string, authz *core.Authoriza
 	if chalType == acme.ChallengeEK {
 		chal = &core.Challenge{
 			ID: id,
-			EkChallenge: acme.EkChallenge{
+			Challenge: acme.Challenge{
 				Type:     chalType,
 				Token:    newToken(),
 				URL:      wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", challengePath, id)),
@@ -1993,6 +1993,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder(ctx context.Context, response http.Res
 		return
 	}
 
+	println("Finalize Message csr: ", finalizeMessage.CSR)
 	csrBytes, err := base64.RawURLEncoding.DecodeString(finalizeMessage.CSR)
 	if err != nil {
 		wfe.sendError(
@@ -2010,12 +2011,15 @@ func (wfe *WebFrontEndImpl) FinalizeOrder(ctx context.Context, response http.Res
 	// split order identifiers per types
 	var orderDNSs []string
 	var orderIPs []net.IP
+	//var orderEKs []string
 	for _, ident := range orderIdentifiers {
 		switch ident.Type {
 		case acme.IdentifierDNS:
 			orderDNSs = append(orderDNSs, ident.Value)
 		case acme.IdentifierIP:
 			orderIPs = append(orderIPs, net.ParseIP(ident.Value))
+		case acme.IdentifierEK:
+			orderDNSs = append(orderDNSs, ident.Value)
 		default:
 			wfe.sendError(acme.MalformedProblem(
 				fmt.Sprintf("Order includes unknown identifier type %s", ident.Type)), response)
@@ -2043,13 +2047,18 @@ func (wfe *WebFrontEndImpl) FinalizeOrder(ctx context.Context, response http.Res
 	}
 
 	// Check that the CSR's names match the order names exactly
-	for i, name := range orderDNSs {
+	// Test wurde dactiviert da DNS Value vom Server kommt, doppelte Prüfung ist nicht nötig.
+	// Hier kann der DNS Value allerdings nicht erst übergeben werden da er für das CSR benötigt wird
+	// Einzige Ausnhame wäre maximal wenn csr nicht zur Verwendung des Certifiaktes verwendet wird, oder einzelne Werte ausgetauscht werden können
+	// -> Frage nach Sinnhaftigkeit
+
+	/* for i, name := range orderDNSs {
 		if name != csrDNSs[i] {
 			wfe.sendError(acme.UnauthorizedProblem(
 				fmt.Sprintf("CSR is missing Order domain %q", name)), response)
 			return
 		}
-	}
+	} */
 	for i, IP := range orderIPs {
 		if !csrIPs[i].Equal(IP) {
 			wfe.sendError(acme.UnauthorizedProblem(
@@ -2614,7 +2623,7 @@ func uniqueIPs(IPs []net.IP) []net.IP {
 	return results
 }
 
-func uniqueEKs(eks string) []string {
+func uniqueEKs(eks string) string {
 	return db.NewMemoryStore().GetDNSByEK(eks)
 }
 
